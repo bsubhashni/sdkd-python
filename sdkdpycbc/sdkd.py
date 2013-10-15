@@ -38,27 +38,8 @@ class SDKD(Thread):
             h.start()
 
     def run(self, *args, **kwargs):
-        print "SDKD Running..."
         ctl_socket, ctl_addr = self.lsn.accept()
         self.ctl = Control(ctl_socket)
         self.ctl.start()
         self.ctl.wait_for_init()
-        print "Initialization done"
         self.accept_new_handles()
-
-def main():
-    import argparse
-
-    ap = argparse.ArgumentParser()
-    ap.add_argument("-l", "--listen",
-                    help="listening port", type=int, default=0)
-    opts = ap.parse_args()
-
-    sdkd = SDKD(opts.listen)
-    print "Listening on", sdkd.addr
-    sdkd.start()
-    sdkd.join()
-    print "SDKD Joined.."
-
-if __name__ == '__main__':
-    main()
