@@ -23,6 +23,11 @@ ap.add_argument('--client-timeout', type=float,
 ap.add_argument('--pool-size', type=int, default=-1,
                 help="Connection pool size to use")
 
+ap.add_argument('--conncache', type=str, default=None,
+                help="Path to configuration cache")
+
+ap.add_argument('-V', '--version', action='store_true',
+                help="Print version/configuration info and exit")
 
 
 import sys
@@ -36,6 +41,13 @@ from sdkdpycbc.pool import ConnectionPool
 
 Handle.DEFAULT_TIMEOUT = options.client_timeout
 ConnectionPool.POOL_SIZE = options.pool_size
+ConnectionPool.CONNCACHE = options.conncache
+
+if options.version:
+    from sdkdpycbc.control import gen_info_dict
+    from pprint import pprint
+    pprint(gen_info_dict())
+    sys.exit(0)
 
 def run_sdkd():
     sdkd = SDKD(options.listen)

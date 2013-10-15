@@ -7,7 +7,7 @@ from sdkdpycbc.server import Server
 from sdkdpycbc.handle import Handle
 from sdkdpycbc.protocol.message import Response
 from sdkdpycbc.protocol.results import Status
-
+from sdkdpycbc.pool import ConnectionPool
 
 def gen_info_dict():
     return {
@@ -20,6 +20,11 @@ def gen_info_dict():
         "COMPONENTS" : {
             "LCB": Connection.lcb_version(),
             "SDK": CB_VERSION
+        },
+        "CONFIG": {
+            "CONNCACHE": ConnectionPool.CONNCACHE,
+            "POOL_SIZE": ConnectionPool.POOL_SIZE,
+            "TIMEOUT": Handle.DEFAULT_TIMEOUT
         }
     }
 

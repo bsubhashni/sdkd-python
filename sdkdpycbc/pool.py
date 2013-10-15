@@ -25,11 +25,13 @@ class ConnectionPool(object):
     Pool size. Negative number indicates an object per allocation
     """
     POOL_SIZE = -1
+    CONNCACHE = None
 
     @classmethod
     def allocate_instance(self, **kwargs):
+        if self.CONNCACHE:
+            kwargs['conncache'] = self.CONNCACHE
         self.lock.acquire()
-
         key = repr(kwargs['bucket'])
         pool = self.buckets.setdefault(key, BucketPool())
         try:
