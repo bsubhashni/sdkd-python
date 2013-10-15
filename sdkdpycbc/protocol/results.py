@@ -1,6 +1,8 @@
 from collections import defaultdict
 from time import time
 
+from couchbase import exceptions as CBExc
+
 from sdkdpycbc.protocol.constants import StatusCodes
 
 class Status(StatusCodes):
@@ -20,6 +22,34 @@ class Status(StatusCodes):
     @classmethod
     def new_ok(cls):
         return cls()
+
+    @classmethod
+    def from_cbexc(self, exc):
+        if isinstance(exc, CBExc.NotFoundError):
+            code =  self.SUBSYSf_MEMD|Status.MEMD_ENOENT
+
+        elif isinstance(exc, CBExc.TimeoutError):
+            code = self.SUBSYSf_CLIENT|Status.CLIENT_ETMO
+
+        elif exc.__class__ in (CBExc.NetworkError,
+                               CBExc.ConnectError,
+                               CBExc.CouchbaseNetworkError,
+                               CBExc.UnknownHostError):
+            code = self.SUBSYSf_NETWORK|Status.ERROR_GENERIC
+
+        elif isinstance(exc, CBExc.NotMyVbucketError):
+            code = self.SUBSYSf_MEMD|Status.MEMD_EVBUCKET
+
+        elif isinstance(exc, CBExc.AuthError):
+            code = self.SUBSYSf_CLUSTER|Status.CLUSTER_EAUTH
+
+        elif isinstance(exc, CBExc.HTTPError):
+            code = self.SUBSYSf_VIEWS|Status.VIEWS_HTTP_ERROR
+
+        else:
+            code = self.SUBSYSf_CLIENT|Status.ERROR_GENERIC
+
+        return self(code)
 
 
 class TimeWindow(object):
