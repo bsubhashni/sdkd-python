@@ -171,7 +171,7 @@ class Handle(Server):
 
         except CouchbaseError as e:
             status = Status.from_cbexc(e)
-            self.send_response(Response.create_err(status))
+            self.send_response(Response.create_err(request, status))
             self.stop()
 
 
