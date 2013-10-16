@@ -3,6 +3,7 @@ from time import time, sleep
 
 from couchbase.connection import Connection
 from couchbase.exceptions import CouchbaseError
+from couchbase import FMT_BYTES, FMT_UTF8
 
 from sdkdpycbc.protocol.ds_seed import DSSeeded
 from sdkdpycbc.protocol.results import ResultInfo, TimeWindow, Status
@@ -105,7 +106,8 @@ class Handle(Server):
             'password': opts.get('Password', None),
             'host': host,
             'unlock_gil': True,
-            'timeout': self.DEFAULT_TIMEOUT
+            'timeout': self.DEFAULT_TIMEOUT,
+            'default_format': FMT_UTF8
         }
 
         self.pool = ConnectionPool.allocate_instance(**kwargs)
