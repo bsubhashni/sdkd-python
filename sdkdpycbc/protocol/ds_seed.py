@@ -9,18 +9,16 @@ class DSSeeded(object):
         self.continuous = spec['Continuous']
 
     def gen_str(self, seed, size, ix):
-        parts = []
-        parts.append(seed)
-
+        curlen = len(seed)
+        multiplier = 1
         rep = "{0}{1}".format(self.repeat, ix)
-        parts.append(rep)
-        total_len = len(seed) + len(rep)
+        replen = len(rep)
 
-        while total_len < size:
-            parts.append(rep)
-            total_len += len(rep)
+        while curlen + replen * multiplier < size:
+            multiplier += 1
 
-        return "".join(parts)
+        ret = seed + (rep * multiplier)
+        return ret
 
     def batch_iter(self, startval, nitems, use_values=False):
         if not use_values:
