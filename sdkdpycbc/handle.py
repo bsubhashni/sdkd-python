@@ -1,9 +1,13 @@
+#vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
+
+
 from threading import Lock
 from time import time, sleep
 
 from couchbase.connection import Connection
 from couchbase.exceptions import CouchbaseError
-from couchbase import FMT_BYTES, FMT_UTF8
+from couchbase.transcoder import Transcoder
+from couchbase import FMT_BYTES, FMT_UTF8, FMT_PICKLE, FMT_JSON
 
 from sdkdpycbc.protocol.ds_seed import DSSeeded
 from sdkdpycbc.protocol.results import ResultInfo, TimeWindow, Status
@@ -13,7 +17,7 @@ from sdkdpycbc.pool import ConnectionPool
 
 
 class CommandRunner(object):
-    def __init__(self, pool, meth, cmd, dsiter, batchsize=1, kv_is_dict=True):
+    def __init__(self, pool, meth, cmd, dsiter, transcoder, batchsize=1, kv_is_dict=True):
         self.meth = meth
         self.dsiter = dsiter
         self.cancelled = False
@@ -25,6 +29,8 @@ class CommandRunner(object):
         self.pool = pool
         self._extract_options(cmd.payload.get('Options'))
         self.results = ResultInfo(self.timeres)
+        self.datatype_list = [FMT_PICKLE, FMT_UTF8, FMT_BYTES, FMT_JSON]
+        self.transcoder = transcoder
 
     def _extract_options(self, options):
         if not options:
@@ -48,16 +54,34 @@ class CommandRunner(object):
 
     def _run_one(self):
         t_begin = time()
-        kviter = self.dsiter.batch_iter(nbatch=self.batchsize,
-                                        use_values=self.kv_is_dict)
+        datatype = self.datatype_list[(self.dsiter.cur_iter + self.batchsize) % len(self.datatype_list)]
+
+        kviter = self.dsiter.batch_iter(nbatch=self.batchsize, use_values=self.kv_is_dict)
+
+        encoded_kviter = dict()
+
+        for key in kviter.keys():
+            if datatype == FMT_BYTES:
+                byteval = bytearray(kviter[key],'utf_8')
+                encoded_kviter[key] = self.transcoder.encode_value(byteval, datatype)
+            else:
+                encoded_kviter[key] = self.transcoder.encode_value(kviter[key], datatype)
 
         cb = self.pool.get()
+
         try:
-            self.meth(cb, kviter)
+            if self.meth == Connection.get_multi:
+                rv = self.meth(cb, kviter.keys())
+                for key in rv.keys():
+                    val = self.transcoder.decode_value(rv[key], datatype)
+            else:
+                rv = self.meth(cb, encoded_kviter)
+
             status = Status()
 
         except CouchbaseError as e:
             status = Status.from_cbexc(e)
+
 
         finally:
             self.pool.put(cb)
@@ -78,6 +102,7 @@ class Handle(Server):
     Default timeout for operations
     """
     DEFAULT_TIMEOUT = 2.5
+    transcoder = Transcoder()
 
 
     def __init__(self, parent, sock):
@@ -101,13 +126,15 @@ class Handle(Server):
         if opts.get('OtherNodes'):
             host = [ host ] + opts['OtherNodes']
 
+
         kwargs = {
             'bucket': opts.get('Bucket', 'default'),
             'password': opts.get('Password', None),
             'host': host,
             'unlock_gil': True,
             'timeout': self.DEFAULT_TIMEOUT,
-            'default_format': FMT_UTF8
+            'default_format': FMT_UTF8,
+            'transcoder': self.transcoder
         }
 
         self.pool = ConnectionPool.allocate_instance(**kwargs)
@@ -115,7 +142,7 @@ class Handle(Server):
     def dispatch_cb_command(self, request):
         s = request.cmdname
         meth = None
-        kv_is_dict = False
+        kv_is_dict = True
 
         dsiter = DSSeeded(request.payload['DS']).mkiter()
 
@@ -128,7 +155,7 @@ class Handle(Server):
             raise NotImplementedError()
 
         runner = CommandRunner(self.pool,
-                               meth, request, dsiter, kv_is_dict=kv_is_dict)
+                               meth, request, dsiter, self.transcoder, kv_is_dict=kv_is_dict)
         self._lock.acquire()
         self._cur_runner = runner
         self._lock.release()
