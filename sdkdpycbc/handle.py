@@ -53,8 +53,12 @@ class CommandRunner(object):
 
         cb = self.pool.get()
         try:
-            self.meth(cb, kviter)
+            rvs = self.meth(cb, kviter)
             status = Status()
+            if self.meth == Connection.get_multi:
+                for k, itm in rvs.items():
+                    if not itm.verify_value():
+                        raise Exception("Flags got all messed up :(")
 
         except CouchbaseError as e:
             status = Status.from_cbexc(e)

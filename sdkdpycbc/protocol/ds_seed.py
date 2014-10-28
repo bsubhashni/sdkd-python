@@ -1,5 +1,45 @@
+from couchbase.user_constants import (FMT_BYTES, FMT_UTF8, FMT_PICKLE, FMT_JSON)
+from couchbase.items import Item, ItemOptionDict
+
+# cb.set("key", "value")
+# cb.set_multi("key", "value")
+#
+# item1 = Item(....)
+# item2 = Item(...)
+# itemlist = ItemOptionDict(...)
+# itemlist.add(item1, options_for_item1)
+# itemlist.add(item2, options_for_item2)
+# ...
+# cb.set_multi(itemlist)
+
+ALL_FORMATS = (FMT_BYTES, FMT_UTF8, FMT_PICKLE, FMT_JSON)
+
+class DatatypeItem(Item):
+    def __init__(self, ix=-1, use_datatypes=True, **kwargs):
+        super(DatatypeItem, self).__init__(**kwargs)
+        self.expected_datatype = ALL_FORMATS[(x % len(ALL_FORMATS)) - 1]
+
+    def set_value(self, vstr):
+        if not self.use_datatypes:
+            self.value = vstr
+            return
+
+        if self.expected_datatype == FMT_BYTES:
+            self.value = vstr.encode("utf-8")
+        else:
+            self.value = vstr
+
+    def verify_value(self):
+        if not self.use_datatypes:
+            return True # No verification
+
+        return self.expected_datatype == self.flags
+
+
+
 class DSSeeded(object):
-    def __init__(self, spec):
+
+    def __init__(self, spec, use_datatypes=True): # Use Datatypes should be false for view population
         self.ksize = spec['KSize']
         self.vsize = spec['VSize']
         self.repeat = spec['Repeat']
@@ -7,6 +47,7 @@ class DSSeeded(object):
         self.kseed = spec['KSeed']
         self.vseed = spec['VSeed']
         self.continuous = spec['Continuous']
+        self.use_datatypes = use_datatypes
 
     def gen_str(self, seed, size, ix):
         curlen = len(seed)
@@ -21,19 +62,18 @@ class DSSeeded(object):
         return ret
 
     def batch_iter(self, startval, nitems, use_values=False):
-        if not use_values:
-            it = tuple(
-                self.gen_str(self.kseed, self.ksize, startval + x)
-                             for x in xrange(0, nitems))
+        itmcoll = ItemOptionDict()
+        for x in xrange(startval, startval + nitems):
+            itm = DatatypeItem(key=self.gen_str(self.kseed, self.ksize, x),
+                               ix=x,
+                               use_datatypes=self.use_datatypes)
+            options = {}
+            if use_values:
+                itm.set_value(self.gen_str(self.vseed, self.vsize, x))
+                options['format'] = itm.expected_datatype
+            itmcoll.add(itm, **options)
 
-        else:
-            it = {}
-            for x in xrange(startval, startval + nitems):
-                key = self.gen_str(self.kseed, self.ksize, x)
-                val = self.gen_str(self.vseed, self.vsize, x)
-                it[key] = val
-
-        return it
+        return itmcoll
 
     def mkiter(self):
         return DSIterator(self)
