@@ -17,7 +17,8 @@ ALL_FORMATS = (FMT_BYTES, FMT_UTF8, FMT_PICKLE, FMT_JSON)
 class DatatypeItem(Item):
     def __init__(self, ix=-1, use_datatypes=True, **kwargs):
         super(DatatypeItem, self).__init__(**kwargs)
-        self.expected_datatype = ALL_FORMATS[(x % len(ALL_FORMATS)) - 1]
+        self.expected_datatype = ALL_FORMATS[(ix % len(ALL_FORMATS)) - 1]
+        self.use_datatypes = use_datatypes
 
     def set_value(self, vstr):
         if not self.use_datatypes:
