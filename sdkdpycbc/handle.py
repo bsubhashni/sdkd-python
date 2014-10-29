@@ -8,7 +8,7 @@ from couchbase import FMT_BYTES, FMT_UTF8
 from sdkdpycbc.protocol.ds_seed import DSSeeded
 from sdkdpycbc.protocol.results import ResultInfo, TimeWindow, Status
 from sdkdpycbc.protocol.message import Response
-from sdkdpycbc.server import Server
+from sdkdpycbc.server import Server, HandleClosed
 from sdkdpycbc.pool import ConnectionPool
 
 
@@ -91,6 +91,7 @@ class Handle(Server):
         self._lock = Lock()
         self.parent = parent
         self.hid = None
+        self.name = "SDKD-HANDLE (Pending NEWHANDLE)"
 
     def cancel(self):
         self._lock.acquire()
@@ -165,13 +166,14 @@ class Handle(Server):
             status = Status(Status.SUBSYSf_SDKD|Status.SDKD_EINVAL,
                             "No handle yet")
             resp = Response.create_err(request, status)
-            self.send_response(self.send_response(resp))
+            self.send_response(resp)
             return
 
         try:
             self._make_handle(request)
             self.send_response(Response(request))
             self.parent.register_handle(request.handle_id, self)
+            self.name = "HANDLE-" + str(request.handle_id)
 
         except CouchbaseError as e:
             status = Status.from_cbexc(e)
@@ -186,6 +188,7 @@ class Handle(Server):
 
         if request.cmdname == 'CLOSEHANDLE':
             self.stop()
+            raise HandleClosed()
 
         else:
             self.dispatch_cb_command(request)

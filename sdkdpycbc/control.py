@@ -3,7 +3,7 @@ from threading import Lock
 from couchbase.connection import Connection
 from couchbase import __version__ as CB_VERSION
 
-from sdkdpycbc.server import Server
+from sdkdpycbc.server import Server, HandleClosed
 from sdkdpycbc.handle import Handle
 from sdkdpycbc.protocol.message import Response
 from sdkdpycbc.protocol.results import Status
@@ -34,6 +34,7 @@ class Control(Server):
         super(Control, self).__init__(*args)
         self.handles = {}
         self._lock = Lock()
+        self.name = "SDKD-CONTROL"
 
     def register_handle(self, hid, obj):
         self._lock.acquire()
@@ -61,6 +62,7 @@ class Control(Server):
 
         elif request.cmdname == 'GOODBYE':
             self.stop()
+            raise HandleClosed("Handle closed with GOODBYE")
 
         elif request.cmdname == 'CANCEL':
             handle = self.get_handle(request.handle_id)
