@@ -14,13 +14,13 @@ class SDKD(Thread):
         lsn.bind(('', port))
         lsn.listen(5)
         self.addr = lsn.getsockname()[1]
-
         self.lsn = lsn
 
     def __init__(self, port):
         super(SDKD, self).__init__()
         self._setup_lsn(port)
         self.ctl = None
+        self.name = "SDKD-MAIN"
 
     def accept_new_handles(self):
         while True:
@@ -33,7 +33,7 @@ class SDKD(Thread):
             if not r_out:
                 continue
 
-            newsock, _ = self.lsn.accept()
+            newsock, newname = self.lsn.accept()
             h = Handle(self.ctl, newsock)
             h.start()
 
