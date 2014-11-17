@@ -13,7 +13,7 @@ from sdkdpycbc.pool import ConnectionPool
 
 
 class CommandRunner(object):
-    def __init__(self, pool, meth, cmd, dsiter, batchsize=1, kv_is_dict=True):
+    def __init__(self, pool, meth, cmd, dsiter, batchsize=1, kv_is_dict=True, view_load=False):
         self.meth = meth
         self.dsiter = dsiter
         self.cancelled = False
@@ -25,6 +25,7 @@ class CommandRunner(object):
         self.pool = pool
         self._extract_options(cmd.payload.get('Options'))
         self.results = ResultInfo(self.timeres)
+        self.view_load = False
 
     def _extract_options(self, options):
         if not options:
@@ -48,8 +49,13 @@ class CommandRunner(object):
 
     def _run_one(self):
         t_begin = time()
-        kviter = self.dsiter.batch_iter(nbatch=self.batchsize,
+
+        if not(self.load_view):
+            kviter = self.dsiter.batch_iter(nbatch=self.batchsize,
                                         use_values=self.kv_is_dict)
+        else:
+            kviter = self.dsiter.batch_iter(nbatch=self.batchsize,
+                                        use_values=self.kv_is_dict, view_load=self.view_load)
 
         cb = self.pool.get()
         try:
@@ -121,19 +127,26 @@ class Handle(Server):
         s = request.cmdname
         meth = None
         kv_is_dict = False
+        view_load = False
 
-        dsiter = DSSeeded(request.payload['DS']).mkiter()
-
-        if s == 'MC_DS_MUTATE_SET':
+        if s == MUTATE_SET:
             meth = Connection.set_multi
             kv_is_dict = True
         elif s == 'MC_DS_GET':
             meth = Connection.get_multi
+        elif s == VIEW_LOAD:
+            meth = Connection.set_multi
         else:
             raise NotImplementedError()
 
+        if not(view_load):
+            dsiter = DSSeeded(request.payload['DS']).mkiter()
+        else:
+            dsiter = DSSeeded(request.payload['DS'],
+            request.payload['Schema'], use_datatypes=False, use_schema=True)
+
         runner = CommandRunner(self.pool,
-                               meth, request, dsiter, kv_is_dict=kv_is_dict)
+                               meth, request, dsiter, kv_is_dict=kv_is_dict,view_load=view_load)
         self._lock.acquire()
         self._cur_runner = runner
         self._lock.release()

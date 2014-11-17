@@ -1,5 +1,6 @@
 from couchbase.user_constants import (FMT_BYTES, FMT_UTF8, FMT_PICKLE, FMT_JSON)
 from couchbase.items import Item, ItemOptionDict
+import json
 
 # cb.set("key", "value")
 # cb.set_multi("key", "value")
@@ -40,7 +41,7 @@ class DatatypeItem(Item):
 
 class DSSeeded(object):
 
-    def __init__(self, spec, use_datatypes=True): # Use Datatypes should be false for view population
+    def __init__(self, spec, schema, use_datatypes=True,  use_schema=True): # Use Datatypes should be false for view population
         self.ksize = spec['KSize']
         self.vsize = spec['VSize']
         self.repeat = spec['Repeat']
@@ -49,6 +50,9 @@ class DSSeeded(object):
         self.vseed = spec['VSeed']
         self.continuous = spec['Continuous']
         self.use_datatypes = use_datatypes
+        if use_schema:
+            self.InflateContent = schema[CBSDKD_MSGFLD_V_INFLATEBASE]
+            self.InflateLevel = schema[CBSDKD_MSGFLD_V_INFLATELEVEL]
 
     def gen_str(self, seed, size, ix):
         curlen = len(seed)
@@ -62,16 +66,29 @@ class DSSeeded(object):
         ret = seed + (rep * multiplier)
         return ret
 
-    def batch_iter(self, startval, nitems, use_values=False):
+    def gen_json(self, key, ix):
+        value = dict()
+        value[CBSDKD_MSGFLD_V_KIDENT] = key
+        value[CBSDKD_MSGFLD_V_INFLATEBASE] = self.InflateContent
+        value[CBSDKD_MSGFLD_V_INFLATELEVEL] = self.InflateLevel
+        value[CBSDKD_MSGFLD_V_KSEQ] = ix
+        return json.dump(value)
+
+    def batch_iter(self, startval, nitems, use_values=False, view_load=False):
         itmcoll = ItemOptionDict()
         for x in xrange(startval, startval + nitems):
+            key = self.gen_str(self.kseed, self.ksize, x)
             itm = DatatypeItem(key=self.gen_str(self.kseed, self.ksize, x),
                                ix=x,
                                use_datatypes=self.use_datatypes)
             options = {}
-            if use_values:
+            if use_values and not(view_load):
                 itm.set_value(self.gen_str(self.vseed, self.vsize, x))
                 options['format'] = itm.expected_datatype
+
+            elif use_values and view_load:
+                itm.set_value(self.gen_json(key, x))
+
             itmcoll.add(itm, **options)
 
         return itmcoll
